@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 
 -- | A module to infer the kind of a given type within Template Haskell.
 -- Warning: this implements its own kind inference system, and is therefore
@@ -10,20 +11,18 @@ import Control.Monad.Trans
 import Data.Ord
 import Debug.Trace
 import Data.Map((!))
-import Data.Set
+import Data.Set hiding (foldr)
 import Control.Monad.State.Strict
 import Text.ParserCombinators.ReadP hiding (get)
 
 import Language.Haskell.TH hiding (AppE)
+import Language.Haskell.TH.Instances ()
 import Language.Haskell.TH.Unification
 import Language.Haskell.TH.PprLib hiding (empty, char)
 import qualified Language.Haskell.TH.PprLib as Ppr
 
 type KindUTerm = Term KindFunc Type KindAtom
 type KindUT = UnifT KindFunc Type KindAtom
-
-instance Ord Type where
-	compare = comparing show
 
 type LoopKillerT = StateT (Set Name)
 data KindFunc = KindArrow deriving (Eq, Show)
@@ -34,17 +33,28 @@ data KindAtom = Star deriving (Eq, Show)
 -- 
 -- Note: There has been a bug observed in Template Haskell relating to the parsing of types.  This
 -- assumes that bug has been fixed, requiring GHC at least 6.12.2.
-inferKind :: Name -> Q (Either String Kind)
-inferKind name = do
-	ans <- solveUnification defaultKind (evalStateT (infer (ConT name)) empty)
-	either (return . Left) (\ (x, sol) -> return (Right $ termToK (subTerm defaultKind sol x))) ans
+class InferKind t where
+    inferKind :: t -> Q (Either String Kind)
+
+instance InferKind Name where
+    inferKind name = inferKind (ConT name)
+
+instance InferKind Type where
+    inferKind typ = do
+      ans <- solveUnification defaultKind (evalStateT (infer typ) empty)
+      either (return . Left) (\ (x, sol) -> return (Right $ termToK (subTerm defaultKind sol x))) ans
 
 defaultKind :: Explicit KindFunc KindAtom
 defaultKind = AtomE Star
 
 termToK :: Explicit KindFunc KindAtom -> Kind
+#if MIN_VERSION_template_haskell(2,8,0)
+-- Kind became a synonym of Type here
+termToK (AppE ~KindArrow t1 t2) = termToK t1 `AppT` termToK t2
+#else
 termToK (AppE ~KindArrow t1 t2) = termToK t1 `ArrowK` termToK t2
-termToK (AtomE ~Star) = StarK
+#endif
+termToK (AtomE ~Star) = StarT
 
 infer :: Type -> LoopKillerT (KindUT Q) KindUTerm
 infer (TupleT n) = return (tupleKind n star)
@@ -87,7 +97,11 @@ examine name0 name = do
 	_	-> do
 	  inf <- lift $ lift $ reify name
 	  case inf of
+#if MIN_VERSION_template_haskell(2,5,0)
+		  ClassI dec is	-> examineDec name0 dec
+#else
 		  ClassI dec	-> examineDec name0 dec
+#endif
 		  TyConI dec	-> examineDec name0 dec
 		  PrimTyConI name n _ -> unify (tyVar name) (tupleKind n star)
 		  TyVarI name typ -> do
@@ -178,8 +192,13 @@ handleCxt (EqualP t1 t2) = do
 	unify k1 k2
 
 kToTerm :: Kind -> KindUTerm
+#if MIN_VERSION_template_haskell(2,8,0)
+kToTerm (AppT a b) = kToTerm a ->- kToTerm b
+kToTerm StarT = star
+#else
 kToTerm (ArrowK a b) = kToTerm a ->- kToTerm b
 kToTerm StarK = star
+#endif
 
 (->-) :: KindUTerm -> KindUTerm -> KindUTerm
 (->-) = App KindArrow
