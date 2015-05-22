@@ -5,7 +5,7 @@ module Language.Haskell.TH.Unification (subTerm, Term(..), MonadUnify(..), UnifT
 import Control.Monad
 import Data.Map hiding (map)
 import Control.Monad.State.Strict
-import Control.Monad.Error
+import Control.Monad.Except
 
 data Term f v a = App f (Term f v a) (Term f v a) | Atom a | Var v deriving (Eq, Show)
 data Explicit f a = AppE f (Explicit f a) (Explicit f a) | AtomE a deriving (Eq, Show)
@@ -14,7 +14,7 @@ type Solution f v a = Map v (Explicit f a)
 data Constraint f v a = Term f v a :==: Term f v a
 type Constraints f v a = [Constraint f v a]
 
-newtype UnifT f v a m x = UnifT (StateT (Constraints f v a) (ErrorT String m) x)
+newtype UnifT f v a m x = UnifT (StateT (Constraints f v a) (ExceptT String m) x)
 deriving instance (Monad m) => Monad (UnifT f v a m)
 deriving instance (Monad m) => MonadState (Constraints f v a) (UnifT f v a m)
 
@@ -31,10 +31,10 @@ instance MonadTrans (UnifT f v a) where
 	lift = UnifT . lift . lift
 
 runUnification :: (Ord v, Eq f, Eq a, Monad m) => UnifT f v a m x -> m (Either String (Constraints f v a))
-runUnification (UnifT m) = runErrorT (execStateT m [])
+runUnification (UnifT m) = runExceptT (execStateT m [])
 
 solveUnification :: (Ord v, Eq f, Eq a, Monad m) => Explicit f a -> UnifT f v a m x -> m (Either String (x, Solution f v a))
-solveUnification def (UnifT m) = runErrorT (evalStateT m' [])
+solveUnification def (UnifT m) = runExceptT (evalStateT m' [])
 	where	m' = do	x <- m
 			ans <- solve def =<< get
 			return (x, ans)
