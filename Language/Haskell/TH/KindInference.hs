@@ -8,9 +8,6 @@ module Language.Haskell.TH.KindInference (inferKind) where
 
 -- import Control.Monad
 import Control.Monad.Trans
-import Data.Ord
-import Debug.Trace
-import Data.Map((!))
 import Data.Set hiding (foldr)
 import Control.Monad.State.Strict
 import Text.ParserCombinators.ReadP hiding (get)
@@ -25,8 +22,8 @@ type KindUTerm = Term KindFunc Type KindAtom
 type KindUT = UnifT KindFunc Type KindAtom
 
 type LoopKillerT = StateT (Set Name)
-data KindFunc = KindArrow deriving (Eq, Show)
-data KindAtom = Star deriving (Eq, Show)
+data KindFunc = KindArrow deriving (Eq, Ord, Show)
+data KindAtom = Star deriving (Eq, Ord, Show)
 
 -- | Returns either an error message or the 'Kind' of the type referred to by the specified name.
 -- Works with datas, newtypes, type synonyms, type classes, data families, and type families.
@@ -78,6 +75,7 @@ infer t@VarT{} = return $ Var t
 infer (ConT t) = do
 	examine (Just t) t
 	return (tyCon t)
+infer t = error $ "inferKind - unimplemented: " ++ pprint t
 
 matchUnboxedTuple :: ReadP Int
 matchUnboxedTuple = do
@@ -98,7 +96,7 @@ examine name0 name = do
 	  inf <- lift $ lift $ reify name
 	  case inf of
 #if MIN_VERSION_template_haskell(2,5,0)
-		  ClassI dec is	-> examineDec name0 dec
+		  ClassI dec _is -> examineDec name0 dec
 #else
 		  ClassI dec	-> examineDec name0 dec
 #endif
