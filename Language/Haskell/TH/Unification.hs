@@ -1,7 +1,10 @@
-{-# LANGUAGE UndecidableInstances, FlexibleInstances, MultiParamTypeClasses, FunctionalDependencies, TypeSynonymInstances, StandaloneDeriving, GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE CPP, UndecidableInstances, FlexibleInstances, MultiParamTypeClasses, FunctionalDependencies, TypeSynonymInstances, StandaloneDeriving, GeneralizedNewtypeDeriving #-}
 
 module Language.Haskell.TH.Unification (subTerm, Term(..), MonadUnify(..), UnifT, Explicit(..), solveUnification) where
 
+#if __GLASGOW_HASKELL__ < 710
+import Control.Applicative (Applicative)
+#endif
 import Control.Monad
 import Data.Map hiding (map)
 import Control.Monad.State.Strict
@@ -15,6 +18,8 @@ data Constraint f v a = Term f v a :==: Term f v a
 type Constraints f v a = [Constraint f v a]
 
 newtype UnifT f v a m x = UnifT (StateT (Constraints f v a) (ExceptT String m) x)
+deriving instance Functor m => Functor (UnifT f v a m)
+deriving instance (Monad m, Functor m) => Applicative (UnifT f v a m)
 deriving instance (Monad m) => Monad (UnifT f v a m)
 deriving instance (Monad m) => MonadState (Constraints f v a) (UnifT f v a m)
 

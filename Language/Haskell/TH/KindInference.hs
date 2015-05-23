@@ -182,6 +182,23 @@ handleBdr (KindedTV n k) = do
 	return (tyVar n)
 
 handleCxt :: Pred -> LoopKillerT (KindUT Q) ()
+#if MIN_VERSION_template_haskell(2,10,0)
+handleCxt typ =
+        case unfoldInstance typ of
+          Just (name, args) -> do
+	    kinds <- mapM infer args
+	    unify (Var (ConT name)) (foldr (->-) star kinds)
+	    examine (Just name) name
+        where
+          unfoldInstance :: Type -> Maybe (Name, [Type])
+          unfoldInstance (ConT name) = Just (name, [])
+          unfoldInstance (AppT t1 t2) = maybe Nothing (\ (name, types) -> Just (name, types ++ [t2])) (unfoldInstance t1)
+          unfoldInstance _ = Nothing
+handleCxt (AppT (AppT EqualityT t1) t2) = do
+	k1 <- infer t1
+	k2 <- infer t2
+	unify k1 k2
+#else
 handleCxt (ClassP name args) = do
 	kinds <- mapM infer args
 	unify (Var (ConT name)) (foldr (->-) star kinds)
@@ -190,6 +207,7 @@ handleCxt (EqualP t1 t2) = do
 	k1 <- infer t1
 	k2 <- infer t2
 	unify k1 k2
+#endif
 
 kToTerm :: Kind -> KindUTerm
 #if MIN_VERSION_template_haskell(2,8,0)
