@@ -105,10 +105,12 @@ examine name0 name = do
 		  TyVarI name typ -> do
 		  	kind <- infer typ
 			unify (tyVar name) kind
+                  FamilyI dec insts -> do
+                        examineDec name0 dec
 		  _ -> return ()
-	
+
 mUnify :: Maybe Name -> KindUTerm -> LoopKillerT (KindUT Q) ()
-mUnify name0 k = case name0 of 
+mUnify name0 k = case name0 of
 	Just name0	-> unify (tyCon name0) k
 	_		-> return ()
 
@@ -143,8 +145,8 @@ examineDec name0 (FamilyD _ name bdrs mK) = do
 	visited <- get
 	unless (name `member` visited) $ do
 	  modify (insert name)
-	  mapM_ handleBdr bdrs
-	  unify (tyCon name) (maybe star kToTerm mK)
+	  args <- mapM handleBdr bdrs
+	  unify (tyCon name) (foldr (->-) (maybe star kToTerm mK) args)
 	  mUnify name0 (tyCon name)
 examineDec name0 (TySynD name bdrs typ) = do
 	visited <- get
