@@ -26,49 +26,49 @@ deriving instance (Monad m) => Monad (UnifT f v a m)
 deriving instance (Monad m) => MonadState (Constraints f v a) (UnifT f v a m)
 
 class Monad m => MonadUnify u m | m -> u where
-	unify :: u -> u -> m ()
+        unify :: u -> u -> m ()
 
 instance (Monad m, Ord a, Ord v, Ord f) => MonadUnify (Term f v a) (UnifT f v a m) where
-	a `unify` b = modify (Set.insert (a :==: b))
+        a `unify` b = modify (Set.insert (a :==: b))
 
 instance MonadUnify u m => MonadUnify u (StateT s m) where
-	a `unify` b = lift (a `unify` b)
+        a `unify` b = lift (a `unify` b)
 
 instance MonadTrans (UnifT f v a) where
-	lift = UnifT . lift . lift
+        lift = UnifT . lift . lift
 
 runUnification :: (Ord a, Ord v, Ord f, Eq f, Eq a, Monad m) => UnifT f v a m x -> m (Either String (Constraints f v a))
 runUnification (UnifT m) = runExceptT (execStateT m mempty)
 
 solveUnification :: (Ord a, Ord v, Ord f, Eq f, Eq a, Monad m) => Explicit f a -> UnifT f v a m x -> m (Either String (x, Solution f v a))
 solveUnification def (UnifT m) = runExceptT (evalStateT m' mempty)
-	where	m' = do	x <- m
-			ans <- solve def =<< get
-			return (x, ans)
+        where   m' = do x <- m
+                        ans <- solve def =<< get
+                        return (x, ans)
 
 solve :: (Ord a, Ord v, Ord f, Eq f, Eq a, Monad m) => Explicit f a -> Constraints f v a -> m (Solution f v a)
 solve def constrs0 = case Set.minView constrs0 of
-	Just (Var x :==: Var y, constrs)
-		| x == y	-> solve def constrs
-	Just (Var x :==: t, constrs)
-		-> subSol def x t `liftM` solve def (substitute x t constrs)
-	Just (t :==: Var y, constrs)
-		-> subSol def y t `liftM` solve def (substitute y t constrs)
-	Just (Atom a :==: Atom b, constrs)
-		| a == b	-> solve def constrs
-		| otherwise	-> fail "Mismatched atoms"
-	Just (App f1 x1 y1 :==: App f2 x2 y2, constrs)
-		| f1 == f2	-> solve def (Set.insert (x1 :==: x2) (Set.insert (y1 :==: y2) constrs))
-		| otherwise	-> fail "Mismatched functions"
-	Just (_, _)		-> fail "Function matched to atom"
+        Just (Var x :==: Var y, constrs)
+                | x == y        -> solve def constrs
+        Just (Var x :==: t, constrs)
+                -> subSol def x t `liftM` solve def (substitute x t constrs)
+        Just (t :==: Var y, constrs)
+                -> subSol def y t `liftM` solve def (substitute y t constrs)
+        Just (Atom a :==: Atom b, constrs)
+                | a == b        -> solve def constrs
+                | otherwise     -> fail "Mismatched atoms"
+        Just (App f1 x1 y1 :==: App f2 x2 y2, constrs)
+                | f1 == f2      -> solve def (Set.insert (x1 :==: x2) (Set.insert (y1 :==: y2) constrs))
+                | otherwise     -> fail "Mismatched functions"
+        Just (_, _)             -> fail "Function matched to atom"
         Nothing -> return empty
 
 substitute :: (Ord a, Ord v, Ord f, Eq f, Eq a) => v -> Term f v a -> Constraints f v a -> Constraints f v a
 substitute v t = Set.map (\ (x :==: y) -> sub x :==: sub y) where
-	sub (Var v')
-		| v == v'	= t
-	sub (App f x y) = App f (sub x) (sub y)
-	sub t' = t'
+        sub (Var v')
+                | v == v'       = t
+        sub (App f x y) = App f (sub x) (sub y)
+        sub t' = t'
 
 subTerm :: Ord v => Explicit f a -> Solution f v a -> Term f v a -> Explicit f a
 subTerm def sol (Var v) = findWithDefault def v sol
