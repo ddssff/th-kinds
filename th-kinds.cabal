@@ -1,7 +1,8 @@
-Name:		th-kinds
-Version:	0.1.1
+Name:		th-kinds-fork
+Version:	0.2
 Category:	Template Haskell
 Author:		Louis Wasserman
+Maintainer:     David Fox <dsf@seereason.com>
 License:	BSD3
 License-file:	LICENSE
 Stability:	experimental
