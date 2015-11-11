@@ -7,7 +7,6 @@ import Control.Applicative (Applicative)
 #endif
 import Control.Monad
 import Data.Map as Map hiding (map)
-import Data.Monoid (mempty)
 import Data.Set as Set (Set, insert, map, minView)
 import Control.Monad.State.Strict
 import Control.Monad.Except
