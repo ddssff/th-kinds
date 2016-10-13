@@ -115,6 +115,26 @@ mUnify name0 k = case name0 of
         _               -> return ()
 
 examineDec :: Maybe Name -> Dec -> LoopKillerT (KindUT Q) ()
+#if MIN_VERSION_template_haskell(2,11,0)
+examineDec name0 (DataD cxt name bdrs mK cons _) = do
+        visited <- get
+        unless (name `member` visited) $ do
+          modify (insert name)
+          mapM_ handleCxt cxt
+          args <- mapM handleBdr bdrs
+          unify (tyCon name) (foldr (->-) (maybe star kToTerm mK) args)
+          mUnify name0 (tyCon name)
+          mapM_ handleCon cons
+examineDec name0 (NewtypeD cxt name bdrs mK con _) = do
+        visited <- get
+        unless (name `member` visited) $ do
+          modify (insert name)
+          mapM_ handleCxt cxt
+          args <- mapM handleBdr bdrs
+          unify (tyCon name) (foldr (->-) (maybe star kToTerm mK) args)
+          mUnify name0 (tyCon name)
+          handleCon con
+#else
 examineDec name0 (DataD cxt name bdrs cons _) = do
         visited <- get
         unless (name `member` visited) $ do
@@ -133,6 +153,7 @@ examineDec name0 (NewtypeD cxt name bdrs con _) = do
           unify (tyCon name) (foldr (->-) star args)
           mUnify name0 (tyCon name)
           handleCon con
+#endif
 examineDec name0 (ClassD cxt name bdrs _ _) = do
         visited <- get
         unless (name `member` visited) $ do
@@ -141,7 +162,11 @@ examineDec name0 (ClassD cxt name bdrs _ _) = do
           args <- mapM handleBdr bdrs
           unify (tyCon name) (foldr (->-) star args)
           mUnify name0 (tyCon name)
+#if MIN_VERSION_template_haskell(2,11,0)
+examineDec name0 (DataFamilyD name bdrs mK) = do
+#else
 examineDec name0 (FamilyD _ name bdrs mK) = do
+#endif
         visited <- get
         unless (name `member` visited) $ do
           modify (insert name)
